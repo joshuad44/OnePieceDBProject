@@ -15,27 +15,24 @@ CORS(app)
 # Define models
 class Crew(db.Model):
     __tablename__ = 'Crew'
-    crew_name = db.Column(db.String(100), primary_key=True)
-
-class CrewWithDetails(db.Model):
-    __tablename__ = 'Crew'
-    __table_args__ = {'extend_existing': True}
-    crew_name = db.Column(db.String(100), primary_key=True)
+    crew_id = db.Column(db.Integer, primary_key=True)
+    crew_name = db.Column(db.String(100), nullable=False)
     captain = db.Column(db.String(100), nullable=True)
     ship = db.Column(db.String(100), nullable=True)
 
 class DevilFruit(db.Model):
     __tablename__ = 'Devil_Fruit'
-    devil_fruit_name = db.Column(db.String(100), primary_key=True)
-    type = db.Column(db.String(100))  
-
+    devil_fruit_id = db.Column(db.Integer, primary_key=True)
+    devil_fruit_name = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(100), nullable=True)
+    power = db.Column(db.String(100), nullable=True)
 
 class OPCharacter(db.Model):
     __tablename__ = 'OPCharacter'
     character_id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
-    crew_name = db.Column(db.String(100), db.ForeignKey('Crew.crew_name'), nullable=True)
-    devil_fruit_name = db.Column(db.String(100), db.ForeignKey('Devil_Fruit.devil_fruit_name'), nullable=True)
+    crew_id = db.Column(db.Integer, db.ForeignKey('Crew.crew_id'), nullable=True)
+    devil_fruit_id = db.Column(db.Integer, db.ForeignKey('Devil_Fruit.devil_fruit_id'), nullable=True)
     first_episode_id = db.Column(db.Integer, nullable=True)
 
 class Episode(db.Model):
@@ -56,29 +53,30 @@ class Arc(db.Model):
 def index():
     return render_template('index.html')
 
-@app.route('/crew')
-def crew():
-    return render_template('crew.html')
-
+@app.route('/devil_fruits')
+def devil_fruits():
+    return render_template('devil_fruit.html')
 
 
 @app.route('/api/characters', methods=['GET', 'POST'])
 def manage_characters():
     if request.method == 'GET':
-        characters = OPCharacter.query.all()
+        characters = db.session.query(OPCharacter, Crew, DevilFruit) \
+            .outerjoin(Crew, OPCharacter.crew_id == Crew.crew_id) \
+            .outerjoin(DevilFruit, OPCharacter.devil_fruit_id == DevilFruit.devil_fruit_id).all()
         return jsonify([{
-            'character_id': c.character_id,
-            'name': c.name,
-            'crew_name': c.crew_name,
-            'devil_fruit_name': c.devil_fruit_name,
-            'first_episode_id': c.first_episode_id
+            'character_id': c.OPCharacter.character_id,
+            'name': c.OPCharacter.name,
+            'crew_name': c.Crew.crew_name if c.Crew else None,
+            'devil_fruit_name': c.DevilFruit.devil_fruit_name if c.DevilFruit else None,
+            'first_episode_id': c.OPCharacter.first_episode_id
         } for c in characters])
     elif request.method == 'POST':
         data = request.json
         new_character = OPCharacter(
             name=data['name'],
-            crew_name=data.get('crew_name'),
-            devil_fruit_name=data.get('devil_fruit_name'),
+            crew_id=data.get('crew_id'),
+            devil_fruit_id=data.get('devil_fruit_id'),
             first_episode_id=data.get('first_episode_id')
         )
         db.session.add(new_character)
@@ -89,107 +87,254 @@ def manage_characters():
 def update_delete_character(character_id):
     character = OPCharacter.query.get_or_404(character_id)
 
-    if request.method == 'GET': 
+    if request.method == 'GET':
+        crew = Crew.query.get(character.crew_id)
+        devil_fruit = DevilFruit.query.get(character.devil_fruit_id)
         return jsonify({
             'character_id': character.character_id,
             'name': character.name,
-            'crew_name': character.crew_name,
-            'devil_fruit_name': character.devil_fruit_name,
+            'crew_name': crew.crew_name if crew else None,
+            'devil_fruit_name': devil_fruit.devil_fruit_name if devil_fruit else None,
             'first_episode_id': character.first_episode_id
         })
-    
+
     if request.method == 'PUT':
         data = request.json
         character.name = data['name']
-        character.crew_name = data.get('crew_name')
-        character.devil_fruit_name = data.get('devil_fruit_name')
+        character.crew_id = data.get('crew_id')
+        character.devil_fruit_id = data.get('devil_fruit_id')
         character.first_episode_id = data.get('first_episode_id')
         db.session.commit()
         return jsonify({'message': 'Character updated successfully!'})
-    
+
     if request.method == 'DELETE':
         db.session.delete(character)
         db.session.commit()
         return jsonify({'message': 'Character deleted successfully!'})
 
+@app.route('/api/characters/save', methods=['POST'])
+def save_character():
+    """
+    This route handles both creating a new character and editing an existing one.
+    If 'character_id' is provided in the request, it updates the existing character.
+    Otherwise, it creates a new character.
+    """
+    data = request.json
 
-# Routes for Crews (Character Page)
+    # If character_id is provided, edit the existing character
+    if 'character_id' in data and data['character_id']:
+        character = OPCharacter.query.get_or_404(data['character_id'])
+        character.name = data['name']
+        character.crew_id = data.get('crew_id')
+        character.devil_fruit_id = data.get('devil_fruit_id')
+        character.first_episode_id = data.get('first_episode_id')
+        db.session.commit()
+        return jsonify({'message': 'Character updated successfully!'})
+
+    # Otherwise, create a new character
+    else:
+        new_character = OPCharacter(
+            name=data['name'],
+            crew_id=data.get('crew_id'),
+            devil_fruit_id=data.get('devil_fruit_id'),
+            first_episode_id=data.get('first_episode_id')
+        )
+        db.session.add(new_character)
+        db.session.commit()
+        return jsonify({'message': 'Character added successfully!'})
+
+@app.route('/api/characters/search', methods=['GET'])
+def search_characters():
+    query = request.args.get('query', '').lower()
+
+    # Join OPCharacter with Crew and DevilFruit for search
+    results = db.session.query(OPCharacter, Crew, DevilFruit) \
+        .outerjoin(Crew, OPCharacter.crew_id == Crew.crew_id) \
+        .outerjoin(DevilFruit, OPCharacter.devil_fruit_id == DevilFruit.devil_fruit_id) \
+        .filter(
+            db.or_(
+                OPCharacter.name.ilike(f"%{query}%"),
+                Crew.crew_name.ilike(f"%{query}%"),
+                DevilFruit.devil_fruit_name.ilike(f"%{query}%")
+            )
+        ).all()
+
+    # Format results into a JSON-friendly format
+    return jsonify([{
+        'character_id': c.OPCharacter.character_id,
+        'name': c.OPCharacter.name,
+        'crew_name': c.Crew.crew_name if c.Crew else None,
+        'devil_fruit_name': c.DevilFruit.devil_fruit_name if c.DevilFruit else None,
+        'first_episode_id': c.OPCharacter.first_episode_id
+    } for c in results])
+
+# Route to get all devil fruits
+@app.route('/api/devil_fruits', methods=['GET'])
+def get_devil_fruits():
+    devil_fruits = DevilFruit.query.all()
+    return jsonify([{
+        'devil_fruit_id': fruit.devil_fruit_id,
+        'devil_fruit_name': fruit.devil_fruit_name,
+        'type': fruit.type,
+        'power': fruit.power
+    } for fruit in devil_fruits])
+
+# Route to add a new devil fruit
+@app.route('/api/devil_fruits', methods=['POST'])
+def add_devil_fruit():
+    data = request.json
+    devil_fruit_name = data.get('devil_fruit_name')
+    devil_fruit_type = data.get('type')
+    devil_fruit_power = data.get('power')
+
+    # Check if the devil fruit already exists
+    if DevilFruit.query.filter_by(devil_fruit_name=devil_fruit_name).first():
+        return jsonify({'message': 'Devil Fruit already exists!'}), 400
+
+    new_devil_fruit = DevilFruit(
+        devil_fruit_name=devil_fruit_name,
+        type=devil_fruit_type,
+        power=devil_fruit_power
+    )
+    db.session.add(new_devil_fruit)
+    db.session.commit()
+    return jsonify({'message': 'Devil Fruit added successfully!'}), 201
+
+# Route to handle specific devil fruit by ID
+@app.route('/api/devil_fruits/<int:devil_fruit_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_devil_fruit(devil_fruit_id):
+    devil_fruit = DevilFruit.query.get_or_404(devil_fruit_id)
+    
+    if request.method == 'GET':
+        # Fetch and return the devil fruit details
+        return jsonify({
+            'devil_fruit_id': devil_fruit.devil_fruit_id,
+            'devil_fruit_name': devil_fruit.devil_fruit_name,
+            'type': devil_fruit.type,
+            'power': devil_fruit.power
+        })
+
+    if request.method == 'PUT':
+        # Update the devil fruit
+        data = request.json
+        devil_fruit.devil_fruit_name = data.get('devil_fruit_name', devil_fruit.devil_fruit_name)
+        devil_fruit.type = data.get('type', devil_fruit.type)
+        devil_fruit.power = data.get('power', devil_fruit.power)
+        db.session.commit()
+        return jsonify({'message': 'Devil Fruit updated successfully!'})
+
+    if request.method == 'DELETE':
+        # Delete the devil fruit
+        db.session.delete(devil_fruit)
+        db.session.commit()
+        return jsonify({'message': 'Devil Fruit deleted successfully!'})
+
+# Route to search devil fruits
+@app.route('/api/devil_fruits/search', methods=['GET'])
+def search_devil_fruits():
+    query = request.args.get('query', '').lower()
+
+    results = DevilFruit.query.filter(
+        db.or_(
+            DevilFruit.devil_fruit_name.ilike(f"%{query}%"),
+            DevilFruit.type.ilike(f"%{query}%"),
+            DevilFruit.power.ilike(f"%{query}%")
+        )
+    ).all()
+
+    return jsonify([{
+        'devil_fruit_id': fruit.devil_fruit_id,
+        'devil_fruit_name': fruit.devil_fruit_name,
+        'type': fruit.type,
+        'power': fruit.power
+    } for fruit in results])
+
+# Route to render Crew management page
+@app.route('/crews')
+def crews():
+    return render_template('crews.html')
+
+# Route to get all crews
 @app.route('/api/crews', methods=['GET'])
 def get_crews():
     crews = Crew.query.all()
-    return jsonify([{'name': crew.crew_name} for crew in crews])
-
-@app.route('/api/crews_with_details', methods=['GET'])
-def get_crews_with_details():
-    crews = CrewWithDetails.query.all()
     return jsonify([{
-        'name': crew.crew_name,
+        'crew_id': crew.crew_id,
+        'crew_name': crew.crew_name,
         'captain': crew.captain,
         'ship': crew.ship
     } for crew in crews])
 
-@app.route('/api/crews_with_details', methods=['POST'])
-def add_crew_with_details():
+# Route to add a new crew
+@app.route('/api/crews', methods=['POST'])
+def add_crew():
     data = request.json
-    crew_name = data['name']
+    crew_name = data.get('crew_name')
     captain = data.get('captain')
     ship = data.get('ship')
 
-    if not CrewWithDetails.query.filter_by(crew_name=crew_name).first():
-        new_crew = CrewWithDetails(
-            crew_name=crew_name,
-            captain=captain,
-            ship=ship
-        )
-        db.session.add(new_crew)
-        db.session.commit()
+    # Check if the crew already exists
+    if Crew.query.filter_by(crew_name=crew_name).first():
+        return jsonify({'message': 'Crew already exists!'}), 400
+
+    new_crew = Crew(
+        crew_name=crew_name,
+        captain=captain,
+        ship=ship
+    )
+    db.session.add(new_crew)
+    db.session.commit()
     return jsonify({'message': 'Crew added successfully!'}), 201
 
-@app.route('/api/crews_with_details/<string:crew_name>', methods=['GET', 'PUT', 'DELETE'])
-def update_delete_crew_with_details(crew_name):
-    crew = CrewWithDetails.query.get_or_404(crew_name)
-
-    if request.method == 'GET': 
+# Route to handle specific crew by ID
+@app.route('/api/crews/<int:crew_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_crew(crew_id):
+    crew = Crew.query.get_or_404(crew_id)
+    
+    if request.method == 'GET':
+        # Fetch and return the crew details
         return jsonify({
-            'name': crew.crew_name,
+            'crew_id': crew.crew_id,
+            'crew_name': crew.crew_name,
             'captain': crew.captain,
             'ship': crew.ship
         })
-    
+
     if request.method == 'PUT':
+        # Update the crew
         data = request.json
-        crew.crew_name = data['name']
-        crew.captain = data.get('captain')
-        crew.ship = data.get('ship')
+        crew.crew_name = data.get('crew_name', crew.crew_name)
+        crew.captain = data.get('captain', crew.captain)
+        crew.ship = data.get('ship', crew.ship)
         db.session.commit()
         return jsonify({'message': 'Crew updated successfully!'})
-    
+
     if request.method == 'DELETE':
+        # Delete the crew
         db.session.delete(crew)
         db.session.commit()
         return jsonify({'message': 'Crew deleted successfully!'})
 
+# Route to search crews
+@app.route('/api/crews/search', methods=['GET'])
+def search_crews():
+    query = request.args.get('query', '').lower()
 
-# Routes for Devil Fruits
-@app.route('/api/devil_fruits', methods=['GET'])
-def get_devil_fruits():
-    devil_fruits = DevilFruit.query.all()
-    return jsonify([{'name': fruit.devil_fruit_name} for fruit in devil_fruits])
+    results = Crew.query.filter(
+        db.or_(
+            Crew.crew_name.ilike(f"%{query}%"),
+            Crew.captain.ilike(f"%{query}%"),
+            Crew.ship.ilike(f"%{query}%")
+        )
+    ).all()
 
-@app.route('/api/devil_fruits', methods=['POST'])
-def add_devil_fruit():
-    data = request.json
-    devil_fruit_name = data['name']
-    if not DevilFruit.query.filter_by(devil_fruit_name=devil_fruit_name).first():
-        new_devil_fruit = DevilFruit(devil_fruit_name=devil_fruit_name)
-        db.session.add(new_devil_fruit)
-        db.session.commit()
-    return jsonify({'message': 'Devil fruit added successfully!'}), 201
+    return jsonify([{
+        'crew_id': crew.crew_id,
+        'crew_name': crew.crew_name,
+        'captain': crew.captain,
+        'ship': crew.ship
+    } for crew in results])
 
-
-# New Routes for Timeline and First-Time Character Appearances
-
-# Timeline Route
 
 @app.route('/timeline')
 def show_timeline():
@@ -213,10 +358,6 @@ def show_timeline():
     # Render the timeline page with the arcs and episodes data
     return render_template('timeline.html', arcs=arcs_list, episodes=episodes_list)
 
-
-
-
-# First-time Character Appearances
 @app.route('/api/first_appearances')
 def first_appearances():
     characters = db.session.query(OPCharacter, Episode).join(Episode, OPCharacter.first_episode_id == Episode.episode_id).all()
@@ -240,41 +381,36 @@ def get_first_time_characters(arc_name):
 
 @app.route('/one_piece_analysis')
 def one_piece_analysis():
-    # Get crew character counts
+    # Crew analysis
     crew_counts = db.session.query(
         Crew.crew_name,
         db.func.count(OPCharacter.character_id).label('character_count')
-    ).join(OPCharacter, OPCharacter.crew_name == Crew.crew_name)\
+    ).join(OPCharacter, OPCharacter.crew_id == Crew.crew_id)\
      .group_by(Crew.crew_name).all()
 
-    # Get popular devil fruit types
+    # Devil fruit analysis
     fruit_counts = db.session.query(
-        DevilFruit.type,  # Use 'type' here
-        db.func.count(OPCharacter.devil_fruit_name).label('character_count')
-    ).join(OPCharacter, OPCharacter.devil_fruit_name == DevilFruit.devil_fruit_name)\
+        DevilFruit.type,
+        db.func.count(OPCharacter.character_id).label('character_count')
+    ).join(OPCharacter, OPCharacter.devil_fruit_id == DevilFruit.devil_fruit_id)\
      .group_by(DevilFruit.type)\
-     .order_by(db.func.count(OPCharacter.devil_fruit_name).desc()).all()
+     .order_by(db.func.count(OPCharacter.character_id).desc()).all()
 
     return render_template('one_piece_analysis.html', crew_counts=crew_counts, fruit_counts=fruit_counts)
 
-
-
 @app.route('/api/popular_devil_fruits', methods=['GET'])
 def popular_devil_fruits():
-    # Query to count the number of characters per devil fruit type
     fruit_counts = db.session.query(
-        DevilFruit.type,  # Use 'type' here, not 'devil_fruit_type'
-        db.func.count(OPCharacter.devil_fruit_name).label('character_count')
-    ).join(OPCharacter, OPCharacter.devil_fruit_name == DevilFruit.devil_fruit_name)\
+        DevilFruit.type,
+        db.func.count(OPCharacter.character_id).label('character_count')
+    ).join(OPCharacter, OPCharacter.devil_fruit_id == DevilFruit.devil_fruit_id)\
      .group_by(DevilFruit.type)\
-     .order_by(db.func.count(OPCharacter.devil_fruit_name).desc()).all()
+     .order_by(db.func.count(OPCharacter.character_id).desc()).all()
 
-    # Return the result as JSON
     return jsonify([{
-        'devil_fruit_type': d.type,  # 'type' here as well
-        'character_count': d.character_count
-    } for d in fruit_counts])
-
+        'type': f.type,
+        'character_count': f.character_count
+    } for f in fruit_counts])
 
 if __name__ == '__main__':
     app.run(debug=True)

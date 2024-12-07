@@ -3,21 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>One Piece Character Database</title>
+  <title>One Piece Database</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
 </head>
 <body>
   <div class="container mt-4">
-    <h1 class="text-center">One Piece Character Database</h1>
-    <div class="mb-3">
-      <a href="/timeline" class="btn btn-info">View Timeline</a>
-      <a href="/one_piece_analysis" class="btn btn-info">View Analysis</a>
+    <h1 class="text-center">One Piece Database</h1>
+    <div class="row mb-3">
+      <div class="col-3">
+        <a href="/timeline" class="btn btn-info w-100">View Timeline</a>
+      </div>
+      <div class="col-3">
+        <a href="/one_piece_analysis" class="btn btn-info w-100">View Analysis</a>
+      </div>
+      <div class="col-3">
+        <a href="/devil_fruits" class="btn btn-info w-100">View Devil Fruits</a>
+      </div>
+      <div class="col-3">
+        <a href="/crews" class="btn btn-info w-100">View Crews</a>
+      </div>
     </div>
+    
+    <div class="row mb-3">
+      <div class="col">
+        <button class="btn btn-primary w-100" onclick="showCreateForm()">Add New Character</button>
+      </div>
+    </div>  
+    
     <div class="mb-3">
       <input type="text" id="search" class="form-control" placeholder="Search characters by name..." oninput="searchCharacters()">
     </div>
-    <button class="btn btn-primary mb-3" onclick="showCreateForm()">Add New Character</button>
-    
     
     <table class="table table-bordered table-striped">
       <thead>
@@ -103,17 +118,14 @@
       devilFruits = await devilFruitResponse.json();
       
       // Populate select options
-      populateSelectOptions('crew', crews);
-      populateSelectOptions('devilFruit', devilFruits);
+      populateSelectOptions('crew', crews, 'crew_id', 'crew_name');
+      populateSelectOptions('devilFruit', devilFruits, 'devil_fruit_id', 'devil_fruit_name');
     }
 
-
-
-
-    function populateSelectOptions(selectId, options) {
+    function populateSelectOptions(selectId, options, valueKey, textKey) {
       const selectElement = document.getElementById(selectId);
       selectElement.innerHTML = options.map(option => `
-        <option value="${option.name}">${option.name}</option>
+        <option value="${option[valueKey]}">${option[textKey]}</option>
       `).join('');
     }
 
@@ -133,8 +145,8 @@
         .then(character => {
           document.getElementById('characterId').value = character.character_id;
           document.getElementById('name').value = character.name;
-          document.getElementById('crew').value = character.crew_name || '';
-          document.getElementById('devilFruit').value = character.devil_fruit_name || '';
+          document.getElementById('crew').value = character.crew_id || '';
+          document.getElementById('devilFruit').value = character.devil_fruit_id || '';
           document.getElementById('firstEpisodeId').value = character.first_episode_id || '';
           document.getElementById('modalTitle').innerText = 'Edit Character';
           document.getElementById('characterModal').style.display = 'block';
@@ -145,20 +157,6 @@
       document.getElementById('characterModal').style.display = 'none';
     }
 
-    function searchCharacters() {
-      const query = document.getElementById('search').value.toLowerCase();
-      const rows = document.getElementById('character-table').rows;
-      for (let i = 0; i < rows.length; i++) {
-        const nameCell = rows[i].cells[0];
-        const name = nameCell.textContent || nameCell.innerText;
-        if (name.toLowerCase().indexOf(query) > -1) {
-          rows[i].style.display = '';
-        } else {
-          rows[i].style.display = 'none';
-        }
-      }
-    }
-
     async function saveCharacter() {
       const id = document.getElementById('characterId').value;
       const name = document.getElementById('name').value;
@@ -167,16 +165,17 @@
       const firstEpisodeId = document.getElementById('firstEpisodeId').value;
 
       const method = id ? 'PUT' : 'POST';
-      const url = id ? `${apiUrl}/${id}` : apiUrl;
+      const url = id ? `${apiUrl}/${id}` : `${apiUrl}/save`;
 
       try {
         const response = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            character_id: id || null,
             name,
-            crew_name: crew,
-            devil_fruit_name: devilFruit,
+            crew_id: crew,
+            devil_fruit_id: devilFruit,
             first_episode_id: firstEpisodeId
           })
         });
@@ -199,6 +198,31 @@
         fetchCharacters();
       }
     }
+
+    async function searchCharacters() {
+        const query = document.getElementById('search').value.toLowerCase();
+
+        try {
+            const response = await fetch(`${apiUrl}/search?query=${encodeURIComponent(query)}`);
+            const characters = await response.json();
+            const table = document.getElementById('character-table');
+            table.innerHTML = characters.map(c => `
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.crew_name || ''}</td>
+                    <td>${c.devil_fruit_name || ''}</td>
+                    <td>${c.first_episode_id || ''}</td>
+                    <td>
+                        <button class="btn btn-warning btn-sm" onclick="editCharacter(${c.character_id})">Edit</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteCharacter(${c.character_id})">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (error) {
+            console.error("Error fetching search results:", error.message);
+        }
+    }
+
 
     // Initialize data
     fetchCrewsAndDevilFruits();
