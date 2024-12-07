@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One Piece Character Database</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-4">
+    <h1 class="text-center">One Piece Character Database</h1>
+    <div class="mb-3">
+      <a href="/timeline" class="btn btn-info">View Timeline</a>
+      <a href="/one_piece_analysis" class="btn btn-info">View Analysis</a>
+    </div>
+    <div class="mb-3">
+      <input type="text" id="search" class="form-control" placeholder="Search characters by name..." oninput="searchCharacters()">
+    </div>
+    <button class="btn btn-primary mb-3" onclick="showCreateForm()">Add New Character</button>
+    
+    
+    <table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Crew</th>
+          <th>Devil Fruit</th>
+          <th>First Episode</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="character-table"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal for Create/Edit Character -->
+  <div id="characterModal" class="modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Add Character</h5>
+          <button type="button" class="btn-close" onclick="closeModal()"></button>
+        </div>
+        <div class="modal-body">
+          <form id="characterForm">
+            <input type="hidden" id="characterId">
+            <div class="mb-3">
+              <label for="name" class="form-label">Name</label>
+              <input type="text" id="name" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="crew" class="form-label">Crew</label>
+              <select id="crew" class="form-control"></select>
+            </div>
+            <div class="mb-3">
+              <label for="devilFruit" class="form-label">Devil Fruit</label>
+              <select id="devilFruit" class="form-control"></select>
+            </div>
+            <div class="mb-3">
+              <label for="firstEpisodeId" class="form-label">First Episode</label>
+              <input type="number" id="firstEpisodeId" class="form-control">
+            </div>            
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveCharacter()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const apiUrl = '/api/characters';
+    let crews = [];
+    let devilFruits = [];
+
+    async function fetchCharacters() {
+      const response = await fetch(apiUrl);
+      const characters = await response.json();
+      const table = document.getElementById('character-table');
+      table.innerHTML = characters.map(c => `
+        <tr>
+          <td>${c.name}</td>
+          <td>${c.crew_name || ''}</td>
+          <td>${c.devil_fruit_name || ''}</td>
+          <td>${c.first_episode_id || ''}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="editCharacter(${c.character_id})">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCharacter(${c.character_id})">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    async function fetchCrewsAndDevilFruits() {
+      // Fetching crews
+      const crewResponse = await fetch('/api/crews');
+      crews = await crewResponse.json();
+      
+      // Fetching devil fruits
+      const devilFruitResponse = await fetch('/api/devil_fruits');
+      devilFruits = await devilFruitResponse.json();
+      
+      // Populate select options
+      populateSelectOptions('crew', crews);
+      populateSelectOptions('devilFruit', devilFruits);
+    }
+
+
+
+
+    function populateSelectOptions(selectId, options) {
+      const selectElement = document.getElementById(selectId);
+      selectElement.innerHTML = options.map(option => `
+        <option value="${option.name}">${option.name}</option>
+      `).join('');
+    }
+
+    function showCreateForm() {
+      document.getElementById('characterId').value = '';
+      document.getElementById('name').value = '';
+      document.getElementById('crew').value = '';
+      document.getElementById('devilFruit').value = '';
+      document.getElementById('firstEpisodeId').value = '';
+      document.getElementById('modalTitle').innerText = 'Add Character';
+      document.getElementById('characterModal').style.display = 'block';
+    }
+
+    function editCharacter(id) {
+      fetch(`${apiUrl}/${id}`, { method: 'GET' })
+        .then(response => response.json())
+        .then(character => {
+          document.getElementById('characterId').value = character.character_id;
+          document.getElementById('name').value = character.name;
+          document.getElementById('crew').value = character.crew_name || '';
+          document.getElementById('devilFruit').value = character.devil_fruit_name || '';
+          document.getElementById('firstEpisodeId').value = character.first_episode_id || '';
+          document.getElementById('modalTitle').innerText = 'Edit Character';
+          document.getElementById('characterModal').style.display = 'block';
+      });
+    }
+
+    function closeModal() {
+      document.getElementById('characterModal').style.display = 'none';
+    }
+
+    function searchCharacters() {
+      const query = document.getElementById('search').value.toLowerCase();
+      const rows = document.getElementById('character-table').rows;
+      for (let i = 0; i < rows.length; i++) {
+        const nameCell = rows[i].cells[0];
+        const name = nameCell.textContent || nameCell.innerText;
+        if (name.toLowerCase().indexOf(query) > -1) {
+          rows[i].style.display = '';
+        } else {
+          rows[i].style.display = 'none';
+        }
+      }
+    }
+
+    async function saveCharacter() {
+      const id = document.getElementById('characterId').value;
+      const name = document.getElementById('name').value;
+      const crew = document.getElementById('crew').value;
+      const devilFruit = document.getElementById('devilFruit').value;
+      const firstEpisodeId = document.getElementById('firstEpisodeId').value;
+
+      const method = id ? 'PUT' : 'POST';
+      const url = id ? `${apiUrl}/${id}` : apiUrl;
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            crew_name: crew,
+            devil_fruit_name: devilFruit,
+            first_episode_id: firstEpisodeId
+          })
+        });
+
+        if (!response.ok) {
+          console.error("Error saving character:", response.statusText);
+          return;
+        }
+
+        closeModal();
+        fetchCharacters();  // Reload the character list
+      } catch (error) {
+        console.error("Error while saving character:", error.message);
+      }
+    }
+
+    async function deleteCharacter(id) {
+      if (confirm('Are you sure you want to delete this character?')) {
+        await fetch(`${apiUrl}/${id}`, { method: 'DELETE' });
+        fetchCharacters();
+      }
+    }
+
+    // Initialize data
+    fetchCrewsAndDevilFruits();
+    fetchCharacters();
+  </script>
+</body>
+</html>

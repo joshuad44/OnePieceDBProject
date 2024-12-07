@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Devil Fruit Database</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-4">
+    <h1 class="text-center">Devil Fruit Database</h1>
+    <div class="mb-3">
+      <input type="text" id="search" class="form-control" placeholder="Search devil fruits by name..." oninput="searchDevilFruits()">
+    </div>
+    <button class="btn btn-primary mb-3" onclick="showCreateForm()">Add New Devil Fruit</button>
+    <table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Devil Fruit Name</th>
+          <th>Type</th>
+          <th>Power</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="devil-fruit-table"></tbody>
+    </table>
+  </div>
+
+  <!-- Modal for Create/Edit -->
+  <div id="devilFruitModal" class="modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="modalTitle">Add Devil Fruit</h5>
+          <button type="button" class="btn-close" onclick="closeModal()"></button>
+        </div>
+        <div class="modal-body">
+          <form id="devilFruitForm">
+            <input type="hidden" id="devilFruitName">
+            <div class="mb-3">
+              <label for="devilFruit" class="form-label">Devil Fruit Name</label>
+              <input type="text" id="devilFruitNameInput" class="form-control" required>
+            </div>
+            <div class="mb-3">
+              <label for="type" class="form-label">Type</label>
+              <input type="text" id="type" class="form-control">
+            </div>
+            <div class="mb-3">
+              <label for="power" class="form-label">Power</label>
+              <input type="text" id="power" class="form-control">
+            </div>            
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="saveDevilFruit()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const apiUrl = '/api/devil_fruits';
+    
+    async function fetchDevilFruits() {
+      const response = await fetch(apiUrl);
+      const fruits = await response.json();
+      const table = document.getElementById('devil-fruit-table');
+      table.innerHTML = fruits.map(f => `
+        <tr>
+          <td>${f.devil_fruit_name}</td>
+          <td>${f.type || ''}</td>
+          <td>${f.power || ''}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="editDevilFruit('${f.devil_fruit_name}')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteDevilFruit('${f.devil_fruit_name}')">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function showCreateForm() {
+      document.getElementById('devilFruitName').value = '';
+      document.getElementById('devilFruitNameInput').value = '';
+      document.getElementById('type').value = '';
+      document.getElementById('power').value = '';
+      document.getElementById('modalTitle').innerText = 'Add Devil Fruit';
+      document.getElementById('devilFruitModal').style.display = 'block';
+    }
+
+    function editDevilFruit(name) {
+      fetch(`${apiUrl}/${name}`, { method: 'GET' })
+        .then(response => response.json())
+        .then(fruit => {
+          document.getElementById('devilFruitName').value = fruit.devil_fruit_name;
+          document.getElementById('devilFruitNameInput').value = fruit.devil_fruit_name;
+          document.getElementById('type').value = fruit.type || '';
+          document.getElementById('power').value = fruit.power || '';
+          document.getElementById('modalTitle').innerText = 'Edit Devil Fruit';
+          document.getElementById('devilFruitModal').style.display = 'block';
+      });
+    }
+
+    function closeModal() {
+      document.getElementById('devilFruitModal').style.display = 'none';
+    }
+
+    async function saveDevilFruit() {
+      const name = document.getElementById('devilFruitNameInput').value;
+      const type = document.getElementById('type').value;
+      const power = document.getElementById('power').value;
+      const method = document.getElementById('devilFruitName').value ? 'PUT' : 'POST';
+      const url = document.getElementById('devilFruitName').value ? `${apiUrl}/${name}` : apiUrl;
+
+      try {
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            devil_fruit_name: name,
+            type: type,
+            power: power
+          })
+        });
+
+        if (!response.ok) {
+          console.error("Error saving devil fruit:", response.statusText);
+          return;
+        }
+
+        closeModal();
+        fetchDevilFruits();  // Reload the devil fruit list
+      } catch (error) {
+        console.error("Error while saving devil fruit:", error.message);
+      }
+    }
+
+    async function deleteDevilFruit(name) {
+      if (confirm('Are you sure you want to delete this devil fruit?')) {
+        await fetch(`${apiUrl}/${name}`, { method: 'DELETE' });
+        fetchDevilFruits();
+      }
+    }
+
+    // Initialize data
+    fetchDevilFruits();
+  </script>
+</body>
+</html>

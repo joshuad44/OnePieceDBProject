@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One Piece Timeline</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    /* Styling for the timeline container to make it horizontal and scrollable */
+    #timeline-buttons {
+      display: flex;
+      overflow-x: auto;
+      padding: 10px 0;
+      margin-top: 20px;
+      gap: 10px; /* Space between buttons */
+      scroll-snap-type: x mandatory;
+      scroll-padding: 10px;
+    }
+
+    /* Styling for each timeline button */
+    .timeline-button {
+      min-width: 220px;  /* 2x bigger width */
+      height: 220px;     /* 2x bigger height */
+      font-size: 20px;   /* 2x bigger font size */
+      text-align: center;
+      white-space: normal;
+      cursor: pointer;
+      background-color: #0d6efd;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background-color 0.3s;
+      display: inline-block;
+    }
+
+    /* Hover effect for buttons */
+    .timeline-button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Tooltip styling */
+    .tooltip {
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 5px;
+      border-radius: 3px;
+      display: none;
+    }
+
+    /* Styling for the list of characters below the timeline */
+    #characters-list {
+      margin-top: 20px;
+    }
+
+    #characters-list h3 {
+      margin-bottom: 15px;
+    }
+
+    .character-name {
+      font-size: 18px;
+      color: #333;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container mt-4">
+    <h1 class="text-center">One Piece Timeline</h1>
+
+    <!-- Back Button -->
+    <button class="btn btn-secondary mb-3" onclick="window.history.back()">Go Back</button>
+
+    <!-- Scrollable timeline buttons -->
+    <div id="timeline-buttons" class="mb-3">
+      {% for arc in arcs %}
+        <button class="timeline-button" onclick="showEpisodes('{{ arc.arc_name }}')" title="{{ arc.arc_name }} ({{ arc.start_year }} - {{ arc.end_year }})">
+          {{ arc.arc_name }} <br>({{ arc.start_year }} - {{ arc.end_year }})
+        </button>
+      {% endfor %}
+    </div>
+
+    <!-- Tooltip for displaying additional info on hover -->
+    <div class="tooltip" id="tooltip"></div>
+
+    <!-- Section to display characters who first appeared in the selected arc -->
+    <div id="characters-list"></div>
+
+  </div>
+
+  <script>
+    // Ensure that the Flask data is correctly embedded into the JavaScript
+    const episodesData = JSON.parse('{{ episodes|tojson }}');
+    const arcsData = JSON.parse('{{ arcs|tojson }}');
+
+    // Function to display episodes for each arc
+    function showEpisodes(arcName) {
+      console.log("Clicked arc:", arcName);  // Debugging line to check arc name
+
+      // Fetch the first-time characters for the clicked arc
+      fetch(`/api/first_time_characters/${arcName}`)
+        .then(response => response.json())
+        .then(data => {
+          console.log("Characters in this arc:", data);  // Debugging line to check the data
+          displayCharacters(data);
+        })
+        .catch(error => {
+          console.error('Error fetching characters:', error);
+        });
+    }
+
+    // Function to display the list of characters
+    function displayCharacters(characterNames) {
+      const charactersListDiv = document.getElementById('characters-list');
+      charactersListDiv.innerHTML = '';  // Clear any existing content
+
+      if (characterNames.length === 0) {
+        charactersListDiv.innerHTML = '<p>No characters found for this arc.</p>';
+      } else {
+        const title = document.createElement('h3');
+        title.textContent = 'Characters Who First Appeared in This Arc:';
+        charactersListDiv.appendChild(title);
+
+        // Create a list of characters
+        characterNames.forEach(name => {
+          const div = document.createElement('div');
+          div.classList.add('character-name');
+          div.textContent = name;
+          charactersListDiv.appendChild(div);
+        });
+      }
+    }
+
+    // Tooltip functionality on hover
+    const buttons = document.querySelectorAll('.timeline-button');
+    const tooltip = document.getElementById('tooltip');
+
+    buttons.forEach(button => {
+      button.addEventListener('mouseenter', (e) => {
+        tooltip.style.left = `${e.pageX + 10}px`;
+        tooltip.style.top = `${e.pageY - 28}px`;
+        tooltip.style.display = 'inline-block';
+        tooltip.textContent = e.target.getAttribute('title'); // Show the arc name and years
+      });
+
+      button.addEventListener('mouseleave', () => {
+        tooltip.style.display = 'none';
+      });
+    });
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+</body>
+</html>

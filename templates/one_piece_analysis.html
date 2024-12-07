@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One Piece Database Analysis</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+</head>
+<body>
+  <div class="container mt-4">
+    <h1 class="text-center">One Piece Database Analysis</h1>
+    <button class="btn btn-secondary mb-3" onclick="window.history.back()">Go Back</button>
+    <h3>Crew Character Counts</h3>
+    <table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Crew Name</th>
+          <th>Character Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for crew in crew_counts %}
+        <tr>
+          <td>{{ crew.crew_name }}</td>
+          <td>{{ crew.character_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h3>Most Popular Devil Fruit Types</h3>
+    <table class="table table-bordered table-striped">
+      <thead>
+        <tr>
+          <th>Devil Fruit Type</th>
+          <th>Character Count</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fruit in fruit_counts %}
+        <tr>
+          <td>{{ fruit.type }}</td>
+          <td>{{ fruit.character_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+</body>
+</html>
